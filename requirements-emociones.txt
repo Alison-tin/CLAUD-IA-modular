@@ -1,0 +1,2 @@
+# Solo para un entorno separado; no instalar sobre .venv.
+-r pruebas/dependencias/requirements-emociones-aislado-windows-py311.txt

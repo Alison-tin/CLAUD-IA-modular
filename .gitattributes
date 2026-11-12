@@ -1,0 +1,6 @@
+* text=auto
+*.onnx binary
+*.task binary
+*.tflite binary
+*.png binary
+*.cmd text eol=crlf

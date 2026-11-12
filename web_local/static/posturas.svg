@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- Esquemas para una vista en espejo. Derecha del sujeto = nariz a la derecha de la pantalla. -->
+  <symbol id="frente" viewBox="0 0 140 140">
+    <path fill="currentColor" d="M39 135v-13q2-13 20-17v-9q-17-9-18-38-5-3-4-11 0-7 5-7 0-32 28-32t28 32q5 0 5 7 1 8-4 11-1 29-18 38v9q18 4 20 17v13Z"/>
+    <path d="M51 49h10m18 0h10M70 52v16h-4m-5 12q9 6 18 0" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <g fill="#007f89"><path d="m7 61 12-7v14Zm126 0-12-7v14Z"/><rect x="2" y="59" width="12" height="4"/><rect x="126" y="59" width="12" height="4"/></g>
+  </symbol>
+  <symbol id="derecha" viewBox="0 0 140 140">
+    <path fill="currentColor" d="M38 135v-14q3-13 20-17v-9q-18-10-19-40-4-4-3-11 1-6 5-5 2-29 27-29 28 0 29 29l-2 12 8 14q2 4-6 5l-2 11q-3 12-16 15v8q19 6 21 18v13Z"/>
+    <path d="m61 48 9-1m14-2 6 2m-9 31q8 3 12-1" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <path d="M107 108h25m-8-7 8 7-8 7" fill="none" stroke="#007f89" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="izquierda" viewBox="0 0 140 140"><use href="#derecha" transform="translate(140 0) scale(-1 1)"/></symbol>
+  <symbol id="arriba" viewBox="0 0 140 140">
+    <path fill="currentColor" d="M35 135v-13q1-16 23-21v-9q-17-7-20-27-4-3-4-11 0-5 4-5 1-32 30-32 28 0 30 32 5 0 5 5 0 8-5 11-3 20-19 27v9q22 5 23 21v13Z"/>
+    <path d="m48 43 12-2m18 0 12 2M64 50l5-8 6 8m-16 14q10 5 21 0m-20 15q9 5 18 0" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <path d="M122 84V23m-7 8 7-8 7 8" fill="none" stroke="#007f89" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="abajo" viewBox="0 0 140 140">
+    <path fill="currentColor" d="M36 135v-12q1-13 22-19v-4Q38 84 38 59 34 57 34 50q0-7 5-7 0-32 30-32 29 0 29 32 5 0 5 7 0 7-4 9 0 25-20 41v4q21 6 22 19v12Z"/>
+    <path d="m48 62 12 3m18 0 12-3m-21 9 4 10h-8m-5 10q9 4 18 0" fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+    <path d="M122 23v61m-7-8 7 8 7-8" fill="none" stroke="#007f89" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>

@@ -1,0 +1,2 @@
+# Windows x64, Python 3.11.9. SFace, gestos y web; sin DeepFace.
+-r pruebas/dependencias/requirements-base-windows-py311.txt
