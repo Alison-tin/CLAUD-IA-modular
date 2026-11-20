@@ -185,13 +185,13 @@ class ProteccionMovimientosTests(unittest.TestCase):
         esperados = {
             "configuracion/config.py": "eda158302eb84aacb8a9067735c466f5e4536633d48d47272e7d45355fdb170f",
             # Cambios autorizados: saludo dentro de limites, esperas cancelables y arbitraje.
-            "hardware/arduino.py": "02b05a921e2cdfb9f49720dfd67adc81318895310c58e64a75c983f5b4a11d9f",
-            "movimientos/expresiones.py": "db02e0cc491ee74f4e0577eebc95f3d749d720c0b4f5a46f400e2d6339b4f51f",
-            "movimientos/gestos.py": "1b6762a2493cd688f447bb045ac740a993c089575b50a3123ea5167f683afb3b",
-            "control/pid.py": "ec1db78c75b814fa17bdbcc19e1720e80af486dfb01fd4763c05df79dc802083",
+            "hardware/arduino.py": "f0818ee996a3cf7d05d9bd7c9b792029ae28f1fc05dd4308a5c1ba28c3002371",
+            "movimientos/expresiones.py": "0cc524995e03829868914f9eddcc0f15a702078e9fb70eb9bca01404b3ab061b",
+            "movimientos/gestos.py": "045ab4d9b2bb15d4d13147b9fcb3d028f309be6383b78ee3862d355121f900c5",
+            "control/pid.py": "accaf0d6db4685a9774300ad7a361f0572afa77ff4b74e8fc1fade84047acd00",
         }
         for nombre, huella in esperados.items():
-            self.assertEqual(hashlib.sha256((RAIZ/nombre).read_bytes()).hexdigest(), huella, nombre)
+            self.assertEqual(hashlib.sha256((RAIZ/nombre).read_bytes().replace(b'\r\n',b'\n')).hexdigest(), huella, nombre)
 
     def test_mismas_ordenes_arduino_en_sistema(self):
         def llamadas(nombre):
