@@ -133,6 +133,9 @@ class Peticion(BaseHTTPRequestHandler):
         try:
             if ruta == "/api/estado":
                 return self.responder(200, {"estado": self.server.control.ver(), "csrf": sesion["csrf"]})
+            if ruta == '/api/guia-gestos':
+                from vision.manos import guia_gestos
+                return self.responder(200,{'gestos':guia_gestos()})
             if ruta == "/api/personas":
                 return self.responder(200, {"personas": self.server.control.personas()})
             if ruta == "/api/registro/preparacion":

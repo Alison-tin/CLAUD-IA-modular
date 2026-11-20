@@ -141,6 +141,8 @@ class MotorTests(unittest.TestCase):
             motor.modelo.detectar.return_value = [cara]
             self.assertEqual(motor.reconocer(frame,[(300,300,80,80)])['estado_reconocimiento'],'sin_correspondencia')
             motor.modelo.extraer_cara.assert_not_called()
+            for _ in range(2):
+                self.assertEqual(motor.reconocer(frame,[(10,10,80,80)])['nombre'],'Desconocido')
             self.assertEqual(motor.reconocer(frame,[(10,10,80,80)])['nombre'],'Alexa')
             llamada = motor.modelo.extraer_cara.call_args.args
             self.assertIs(llamada[0],frame)

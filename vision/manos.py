@@ -272,6 +272,53 @@ GESTOS_HABLA = {
 }
 
 
+# Descripciones del programa, no confirmaciones de movimiento mecánico.
+GUIA_GESTOS = {
+    'mano_abierta': ('Mano abierta','Extiende los cinco dedos','Mueve parte de la cara y vuelve al reposo.','Sonrisa por confirmar: esos canales no tienen descripción anatómica.'),
+    'puno': ('Puño','Recoge todos los dedos','Mueve los ojos hacia un lado y hacia el otro.',''),
+    'pulgar_arriba': ('Pulgar arriba','Pulgar extendido hacia arriba','Abre los párpados; abre parcialmente y cierra la boca.',''),
+    'pulgar_abajo': ('Pulgar abajo','Pulgar extendido hacia abajo','Mueve los ojos en vertical; abre parcialmente y cierra la boca.',''),
+    'indice': ('Índice','Extiende solo el índice','Abre parcialmente y cierra la boca dos veces.',''),
+    'dos_dedos': ('Dos dedos','Índice y medio extendidos','Cierra y abre un par de párpados para hacer un guiño.','Falta confirmar el lado del guiño en el cableado.'),
+    'tres_dedos': ('Tres dedos','Índice, medio y anular extendidos','Parpadea dos veces.',''),
+    'cuatro_dedos': ('Cuatro dedos','Recoge el pulgar; extiende los demás','Mueve los ojos hacia un lado y hacia el otro y vuelve al centro.',''),
+    'ok': ('OK','Une pulgar e índice; extiende los demás','Abre parcialmente y cierra la boca tres veces y mueve parte de la cara.','La sonrisa de la expresión Risa no está documentada por canal.'),
+}
+
+
+def guia_gestos():
+    """La guía comparte el selector del sistema y verifica sus nueve JSON actuales."""
+    from propuestas_movimientos.preparar import propuestas
+    from secuencias.reproductor import cargar
+    esperadas=propuestas()
+    # Descripciones ligadas al archivo, para seguir una reasignación de gesto.
+    archivos={'mano_abierta':'alegria.json','puno':'enojo.json','pulgar_arriba':'sorpresa.json',
+              'pulgar_abajo':'tristeza.json','indice':'habla_media.json','dos_dedos':'guino_derecho.json',
+              'tres_dedos':'parpadeo_doble.json','cuatro_dedos':'barrido_horizontal.json','ok':'risa.json'}
+    descripciones={archivo:GUIA_GESTOS[gesto][2:] for gesto,archivo in archivos.items()}
+    resultado=[]
+    for gesto,(archivo,expresion) in GESTO_ACCION.items():
+        nombre,instruccion=GUIA_GESTOS.get(gesto,(gesto,'Gesto pendiente de describir'))[:2]
+        movimiento,nota=descripciones.get(archivo,('Movimiento pendiente de revisar.','Asociación incompleta.'))
+        disponible=coincide=False
+        try:
+            bloques=cargar(archivo)
+            disponible=True
+            coincide=archivo in descripciones and bloques==sorted(esperadas.get(archivo,[]),key=lambda b:b[2])
+        except (ValueError,OSError):
+            pass
+        if not disponible:
+            movimiento='Movimiento no disponible.'
+            nota='Asociación incompleta: falta una secuencia válida.'
+        elif not coincide:
+            movimiento='Movimiento pendiente de revisar.'
+            nota='Asociación incompleta: la secuencia cambió y su descripción debe revisarse.'
+        resultado.append(dict(gesto=gesto,nombre=nombre,instruccion=instruccion,
+            movimiento=movimiento,nota=nota,imagen=gesto.replace('_','-'),
+            archivo=archivo,expresion=expresion,disponible=disponible,coincide_con_codigo=coincide))
+    return resultado
+
+
 
 # COLORES DE LOS GESTOS
 

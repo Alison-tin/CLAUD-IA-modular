@@ -172,3 +172,13 @@
 *.npz
 *.log
 acceso.json
+**/rostros_conocidos.pkl*
+**/embeddings*.npz
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+**/.mypy_cache/
+**/.ruff_cache/

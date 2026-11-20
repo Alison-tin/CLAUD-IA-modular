@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT))
 
 def main():
     from verificar_integracion_sface import ejecutar
-    if ejecutar(ROOT/'documentacion/PRUEBA_EMOCIONES_SEPARADAS_SUITE.log'):
+    if ejecutar(ROOT/'pruebas/VERIFICACION_EMOCIONES_SEPARADAS_SUITE.log'):
         return 1
     import numpy as np
     from experimental.emociones_proceso import EmocionesProceso

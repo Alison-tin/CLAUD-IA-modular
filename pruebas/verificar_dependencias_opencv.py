@@ -113,7 +113,7 @@ def main():
             print('MediaPipe: cara/manos/landmarks ejecutados en imagen sintetica, sin detecciones')
     if args.suite:
         from verificar_integracion_sface import ejecutar
-        return ejecutar(ROOT/'documentacion'/'PRUEBA_OPENCV_SUITE.log')
+        return ejecutar(ROOT/'pruebas'/'VERIFICACION_OPENCV_SUITE.log')
     return 0
 
 

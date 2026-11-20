@@ -41,6 +41,39 @@ let registroActualizado = null;
 let verificacionVisible = null;
 const verificacionesEntendidas = new Set();
 
+function renderSimilitudesRegistro(lecturas) {
+  const destino=$("verification-scores");
+  destino.replaceChildren();
+  if (!Array.isArray(lecturas) || lecturas.length!==5 || !lecturas[0] || typeof lecturas[0]!=='object') return false;
+  const nombres=Object.keys(lecturas[0]);
+  if (!nombres.length || !lecturas.every(s=>s && typeof s==='object' && Object.keys(s).length===nombres.length &&
+      nombres.every(n=>Number.isFinite(s[n]) && s[n]>=-1 && s[n]<=1))) return false;
+  const posturas=['Frente','Derecha','Izquierda','Arriba','Abajo'];
+  nombres.sort((a,b)=>lecturas.reduce((total,s)=>total+s[b]-s[a],0) || a.localeCompare(b));
+  function comparar(nombre) {
+    const bloque=document.createElement('section');bloque.className='comparison-person';
+    const titulo=document.createElement('h3');titulo.textContent=`Similitud con ${nombre}`;bloque.append(titulo);
+    lecturas.forEach((scores,i)=>{
+      const fila=document.createElement('div');fila.className='comparison-pose';
+      const postura=document.createElement('span');postura.textContent=posturas[i];
+      const valor=document.createElement('span');valor.className='comparison-value';
+      const porcentaje=(scores[nombre]*100).toFixed(1).replace('.',',')+' %';valor.textContent=porcentaje;
+      const barra=document.createElement('progress');barra.max=100;barra.value=Math.max(0,scores[nombre]*100);
+      barra.setAttribute('aria-label',`Similitud con ${nombre}, ${posturas[i]}: ${porcentaje}`);
+      fila.append(postura,barra,valor);bloque.append(fila);
+    });
+    return bloque;
+  }
+  const resumen=document.createElement('p');resumen.className='comparison-summary';
+  resumen.textContent='5/5 posturas. Primero se muestra la mayor similitud media.';destino.append(resumen,comparar(nombres[0]));
+  if (nombres.length>1) {
+    const detalles=document.createElement('details');const titulo=document.createElement('summary');titulo.textContent='Ver detalles';
+    detalles.append(titulo);nombres.slice(1).forEach(n=>detalles.append(comparar(n)));destino.append(detalles);
+  }
+  const nota=document.createElement('p');nota.className='comparison-summary';nota.textContent='Similitud, no probabilidad de identidad.';destino.append(nota);
+  return true;
+}
+
 function renderVerificacionRegistro(s) {
   const dialogo = $("registration-verification");
   // El resultado ya mostrado se conserva aunque lleguen más actualizaciones.
@@ -81,9 +114,7 @@ function renderVerificacionRegistro(s) {
   $("verification-cancel").hidden = !(revision || repetir);
   $("verification-confirm").checked = false;
   $("verification-approve").disabled = true;
-  $("verification-scores").textContent = revision ? resultado.puntuaciones.map((scores,i) =>
-    `${['Frente','Derecha','Izquierda','Arriba','Abajo'][i]}: ` + Object.entries(scores)
-      .sort((a,b)=>b[1]-a[1]).map(([nombre,score])=>`${nombre}: ${score.toFixed(4)}`).join(' · ')).join('\n') : '';
+  $("verification-comparison").hidden = !renderSimilitudesRegistro(resultado?.puntuaciones);
   $("verification-message").textContent = mensaje;
   $("verification-title").hidden = !fallo;
   $("verification-loading").hidden = terminado;
@@ -199,30 +230,31 @@ async function refreshPorts() {
 function modeDisplay() {
   const physical = $("system-mode").value === "fisico";
   $("port-controls").hidden = !physical;
+  document.querySelector('[data-option="emociones"]').disabled=false;
   document.querySelector(".mode-card strong").textContent = physical ? "Cabeza física" : "Modo demostración";
   document.querySelector(".mode-card div>span").textContent = physical ? "Usa la comunicación existente con Arduino" : "Sin órdenes a Arduino";
   document.querySelector(".control-card>p").textContent = physical ? "Revisa el puerto y confirma el arranque antes de conectar." : "Sin órdenes a Arduino";
   document.querySelector(".demo-tag").textContent = physical ? "Cabeza física" : "Modo demo";
 }
-const gestures = [
-  ["Mano abierta", "Extiende los cinco dedos", "mano-abierta"],
-  ["Puño", "Recoge todos los dedos", "puno"],
-  ["Pulgar arriba", "Pulgar extendido hacia arriba", "pulgar-arriba"],
-  ["Pulgar abajo", "Pulgar extendido hacia abajo", "pulgar-abajo"],
-  ["Índice", "Extiende solo el índice", "indice"],
-  ["Dos dedos", "Índice y medio extendidos", "dos-dedos"],
-  ["Tres dedos", "Índice, medio y anular extendidos", "tres-dedos"],
-  ["Cuatro dedos", "Recoge el pulgar; extiende los demás", "cuatro-dedos"],
-  ["OK", "Une pulgar e índice; extiende los demás", "ok"]
-];
-for (const [title, description, image] of gestures) {
-  const item = document.createElement("div"); item.className = "gesture-item";
-  const img = document.createElement("img");
-  img.src = `/imagenes/${image}.png`; img.alt = "";
-  img.width = 512; img.height = 512; img.className = "gesture-image";
-  const strong = document.createElement("strong"), span = document.createElement("span");
-  strong.textContent = title; span.textContent = description;
-  item.append(img, strong, span); $("gesture-guide").append(item);
+function renderGuiaGestos(gestos) {
+  const lista=$('gesture-guide');lista.replaceChildren();
+  for (const gesto of gestos) {
+    const item=document.createElement('div');item.className='gesture-item';
+    item.dataset.gesto=gesto.gesto;
+    const img=document.createElement('img');img.src=`/imagenes/${gesto.imagen}.png`;
+    img.alt='';img.width=512;img.height=512;img.className='gesture-image';
+    const nombre=document.createElement('strong');nombre.textContent=gesto.nombre;
+    const instruccion=document.createElement('span');instruccion.textContent=gesto.instruccion;
+    const movimiento=document.createElement('p');movimiento.className='gesture-movement';
+    movimiento.textContent=`Robot: ${gesto.movimiento}`;
+    item.append(img,nombre,instruccion,movimiento);
+    lista.append(item);
+  }
+}
+async function cargarGuiaGestos() {
+  $('gesture-guide').textContent='Cargando movimientos...';
+  try { const datos=await request('/api/guia-gestos');renderGuiaGestos(datos.gestos); }
+  catch (error) { $('gesture-guide').textContent='No se pudo cargar la guía. Vuelve a abrirla.';toast(error.message); }
 }
 function toast(message) {
   $("toast").textContent = message; $("toast").hidden = false;
@@ -329,8 +361,10 @@ function render(s) {
   $("camera-recognition").hidden = !name;
   $("person-note").textContent = name === "Desconocido" ? "Sin coincidencia aceptada" : s.rostros > 1 ? "Una persona a la vez" : s.estado_reconocimiento === "error" ? "Reconocimiento no disponible" : !name ? "Esperando un rostro" : "";
   $("person-note").hidden = Boolean(name && name !== "Desconocido");
-  $("result-expression").textContent = s.opciones.emociones ? s.expresion || "Sin lectura" : "Desactivado";
-  $("expression-note").textContent = s.emociones_estado === "cargando" ? "Preparando el análisis…" : s.emociones_estado === "no disponible" ? "Análisis no disponible por ahora" : "Una estimación visual";
+  const fisico=$("system-mode").value==='fisico';
+  const emocionVigente=!offline && s.fase==='activo' && s.camara && s.rostros===1 && s.emociones_estado==='listo';
+  $("result-expression").textContent = s.opciones.emociones ? emocionVigente && s.expresion || "Sin lectura" : "Desactivado";
+  $("expression-note").textContent = !s.opciones.emociones ? '' : s.detalle_emociones || (s.emociones_estado === "cargando" ? "Preparando el análisis…" : s.emociones_estado === "no disponible" ? "Análisis no disponible por ahora" : "Una estimación visual");
   $("result-gesture").textContent = s.opciones.gestos ? s.gesto || "Sin gesto" : "Desactivado";
   document.querySelectorAll("[data-option]").forEach(input => {
     input.checked = s.opciones[input.dataset.option]; input.disabled = registering || s.fase === "deteniendo";
@@ -510,7 +544,7 @@ $('evaluation-form').addEventListener('submit', async event => {
 $("retry-registration").addEventListener("click", () => action("/api/reintentar-registro"));
 $("cancel-register").addEventListener("click", () => action("/api/detener"));
 $("close-register").addEventListener("click", () => { $("register-dialog").close(); if (state?.actividad === "registro") toast("El registro sigue abierto. Puedes retomarlo desde Registrar persona o detenerlo desde el laboratorio."); });
-$("guide-button").addEventListener("click", () => $("guide-dialog").showModal());
+$("guide-button").addEventListener("click", () => { $("guide-dialog").showModal(); cargarGuiaGestos(); });
 $("close-guide").addEventListener("click", () => $("guide-dialog").close());
 $("refresh-people").addEventListener("click", loadPeople);
 for (const id of ["close-delete", "cancel-delete"]) $(id).addEventListener("click", () => { $("delete-dialog").close(); deleteName = null; });

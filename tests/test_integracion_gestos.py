@@ -24,6 +24,151 @@ class Rapido(threading.Event):
 
 
 class IntegracionTests(unittest.TestCase):
+    def test_guia_usa_archivos_reales_y_marca_asociacion_incompleta(self):
+        from vision.manos import guia_gestos
+        guia={g['gesto']:g for g in guia_gestos()}
+        self.assertEqual(len(guia),9)
+        for gesto,(archivo,_) in GESTO_ACCION.items():
+            self.assertEqual(guia[gesto]['archivo'],archivo)
+            self.assertTrue(guia[gesto]['coincide_con_codigo'])
+        self.assertIn('dos veces',guia['indice']['movimiento'])
+        self.assertIn('tres veces',guia['ok']['movimiento'])
+        self.assertIn('confirmar',guia['mano_abierta']['nota'])
+        real=cargar
+        def cambiado(nombre):
+            bloques=real(nombre)
+            return bloques[:-1] if nombre=='sorpresa.json' else bloques
+        with patch('secuencias.reproductor.cargar',side_effect=cambiado):
+            cambio={g['gesto']:g for g in guia_gestos()}['pulgar_arriba']
+            self.assertFalse(cambio['coincide_con_codigo'])
+            self.assertIn('incompleta',cambio['nota'])
+        with patch('secuencias.reproductor.cargar',side_effect=ValueError('Falta JSON')):
+            self.assertTrue(all(not g['disponible'] for g in guia_gestos()))
+
+    def test_guia_sigue_una_reasignacion_del_selector(self):
+        from vision.manos import guia_gestos
+        with patch.dict(GESTO_ACCION,{'pulgar_arriba':('risa.json','Risa')}):
+            g=next(g for g in guia_gestos() if g['gesto']=='pulgar_arriba')
+            self.assertEqual(g['archivo'],'risa.json')
+            self.assertIn('tres veces',g['movimiento'])
+
+    def test_saludo_cancelable_no_reanuda_tras_otra_accion(self):
+        from movimientos.expresiones import expresion_saludo
+        with patch('serial.Serial',side_effect=AssertionError('Sin hardware')):
+            a=Arduino(demo=True);a.demo=False;a.ser=MagicMock(is_open=True)
+            pausa=threading.Event()
+            real=a.enviar
+            def enviar(*args):
+                real(*args)
+                if args[:2]==(0,12):pausa.set()
+            with patch.object(a,'enviar',side_effect=enviar):
+                rep=Reproductor(a)
+                self.assertTrue(rep.accion('saludo',expresion_saludo))
+                self.assertTrue(pausa.wait(2))
+                self.assertFalse(rep.reproducir('sorpresa.json'))
+                a.enviar(2,1,464,3)  # seguimiento descartado durante saludo
+                rep.detener()
+                n=a.ser.write.call_count
+                self.assertFalse(rep._t.is_alive())
+                self.assertFalse(rep.accion('saludo',expresion_saludo))
+                self.assertFalse(rep.reproducir('risa.json'))
+                self.assertEqual(a.ser.write.call_count,n)
+                self.assertIn(b'PCA,2,4,410,3\n',[c.args[0] for c in a.ser.write.call_args_list])
+                self.assertNotIn(b'PCA,2,1,464,3\n',[c.args[0] for c in a.ser.write.call_args_list])
+
+    def test_limites_de_todas_las_acciones_sin_cambiar_calibracion(self):
+        from movimientos import expresiones,gestos
+        from configuracion.config import PCA,PCA0,SERVO,SERVO_CUELLO
+        with patch('serial.Serial',side_effect=AssertionError('Sin hardware')),patch('time.sleep'):
+            a=Arduino(demo=True);a.demo=False;a.ser=MagicMock(is_open=True)
+            a.ir_a_centro();a.parpado(True);a.parpado(False)
+            for funcion in [expresiones.expresion_saludo,expresiones.expresion_neutro,
+                            expresiones.expresion_reconocido,expresiones.mover_boca]+gestos.GESTOS_VIDA:
+                funcion(a)
+            for llamada in a.ser.write.call_args_list:
+                _,p,c,pos,v=llamada.args[0].decode().strip().split(',')
+                tabla=SERVO if int(p)==PCA else SERVO_CUELLO
+                self.assertLessEqual(tabla[int(c)][0],int(pos))
+                self.assertLessEqual(int(pos),tabla[int(c)][1])
+            n=a.ser.write.call_count
+            for orden in [(2,4,400,3),(0,12,651,3),(9,1,400,3),(0,13,300,3),
+                          (2,4,float('nan'),3),(2,4,525,0)]:
+                with self.assertRaises(ValueError):a.enviar(*orden)
+            self.assertEqual(n,a.ser.write.call_count)
+
+    def test_emociones_mapeo_inferencias_distintas_y_cancelacion(self):
+        from secuencias.reproductor import EmocionesMovimiento
+        rep=MagicMock();rep.reproducir.return_value=True;rep.accion.return_value=True
+        for nombre,archivo in EmocionesMovimiento.MAPA.items():
+            control=EmocionesMovimiento(rep)
+            r=dict(nombre=nombre,sesion='sesion',id=1)
+            self.assertFalse(control.actualizar(r))
+            self.assertFalse(control.actualizar(r))  # misma inferencia no confirma
+            self.assertTrue(control.actualizar(dict(r,id=2)))
+            rep.reproducir.assert_called_with(archivo,origen='emocion')
+            self.assertFalse(control.actualizar(dict(r,id=3)))  # pausa entre acciones
+            control.actualizar(None)
+            rep.cancelar_emocion.assert_called()
+        control=EmocionesMovimiento(rep)
+        for i,n in enumerate(['Feliz','Triste','Feliz','Asustado','Asustado','Disgustado','Disgustado']):
+            self.assertFalse(control.actualizar(dict(nombre=n,sesion='s',id=i)))
+        a=Arduino(demo=True);a.demo=False;a.ser=MagicMock(is_open=True)
+        enviada=threading.Event()
+        a.ser.write.side_effect=lambda _:enviada.set()
+        real=Reproductor(a)
+        try:
+            self.assertTrue(real.reproducir('risa.json',origen='emocion'))
+            self.assertTrue(enviada.wait(2))
+            real.cancelar_emocion()
+            real._t.join(2)
+            self.assertFalse(real._t.is_alive())
+            n=a.ser.write.call_count
+            real.detener()
+            self.assertEqual(n,a.ser.write.call_count)
+        finally:
+            real.detener()
+
+    def test_web_fisica_emocion_proceso_a_secuencia_arduino_simulado(self):
+        from aplicacion import sistema
+        import itertools
+        eventos=Queue();puente=Puente(eventos,Queue(),Queue(),threading.Event(),)
+        backend=MagicMock()
+        backend.estado.return_value=dict(ok=True,intentado=True,externo=True,detalle='listo')
+        ids=itertools.count(1)
+        backend.actualizar.side_effect=lambda *a,**k:dict(nombre='Feliz',confianza=.8,sesion='s',id=next(ids))
+        cara=MagicMock();cara.detect.return_value=NS(detections=[NS(bounding_box=NS(origin_x=220,origin_y=100,width=180,height=200))])
+        mano=MagicMock();mano.detect.return_value=NS(hand_landmarks=[])
+        cap=MagicMock();cap.isOpened.return_value=True
+        cap.get.side_effect=lambda prop:640 if prop==3 else 480 if prop==4 else 30
+        reps=[];contador=[0]
+        def leer():
+            if reps and reps[0]._t:reps[0]._t.join(2)
+            contador[0]+=1
+            return (True,np.zeros((480,640,3),np.uint8)) if contador[0]<=4 else (False,None)
+        cap.read.side_effect=leer
+        def crear(a,avisar):
+            rep=Reproductor(a,avisar);rep._cancelar=Rapido()
+            rep.accion=MagicMock(return_value=False)  # aislar disparador de emociones del saludo
+            reps.append(rep);return rep
+        serial=MagicMock(is_open=True);serial.port='SIMULADO'
+        with ExitStack() as st:
+            st.enter_context(patch('serial.Serial',return_value=serial))
+            st.enter_context(patch('cv2.VideoCapture',side_effect=AssertionError('Sin camara')))
+            for nombre,valor in [('abrir_camara',cap),('descargar_modelos',None),('cargar_db',{'imagenes':[],'nombres':[]})]:
+                st.enter_context(patch.object(sistema,nombre,return_value=valor))
+            st.enter_context(patch.object(sistema,'_cargar_deepface',side_effect=AssertionError('No importar DeepFace en principal')))
+            st.enter_context(patch.object(sistema.mp_vision.FaceDetector,'create_from_options',return_value=cara))
+            st.enter_context(patch.object(sistema.mp_vision.HandLandmarker,'create_from_options',return_value=mano))
+            st.enter_context(patch.object(sistema,'Reproductor',side_effect=crear))
+            st.enter_context(patch.object(sistema.time,'sleep'))
+            sistema.ejecutar(demo=False,port='SIMULADO',interfaz=puente,emociones_externas=backend)
+        enviados=[c.args[0].decode() for c in serial.write.call_args_list]
+        esperados=[f'PCA,{p},{c},{pos},{v}\n' for p,c,t,d,pos,v in cargar('alegria.json')]
+        self.assertTrue(any(enviados[i:i+len(esperados)]==esperados for i in range(len(enviados))))
+        self.assertTrue(any(t=='expresion' and v['nombre']=='Feliz' for t,v in eventos.queue))
+        backend.cerrar.assert_called_once();serial.close.assert_called_once()
+        self.assertFalse(reps[0]._t.is_alive())
+
     def test_confirmacion_web_advierte_propuestas(self):
         html = (Path(__file__).resolve().parents[1]/'web_local/static/index.html').read_text(encoding='utf-8')
         dialogo = html.split('id="physical-dialog"', 1)[1].split('</dialog>', 1)[0]

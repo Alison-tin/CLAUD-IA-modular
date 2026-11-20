@@ -30,6 +30,7 @@
 .gesture-image{display:block;width:min(100%,200px);height:auto;aspect-ratio:1;object-fit:contain;margin:0 auto 16px}
 .gesture-item strong{font-size:15px;line-height:1.4}
 .gesture-item span{font-size:12px;line-height:1.5;margin-top:7px}
+.gesture-item .gesture-movement{font-size:13px;font-weight:600;line-height:1.5;margin-top:10px;color:var(--ink)}
 @media(max-width:1190px){
  .app-shell{grid-template-columns:260px minmax(0,1fr)}
  .lab-grid{grid-template-columns:minmax(0,1fr) 280px}
@@ -241,7 +242,14 @@ body.capture-open{overflow:hidden}
 #verification-message{font-size:16px;line-height:1.45;margin:0}
 #verification-understood{margin-top:22px}
 #verification-review{margin-top:12px;text-align:left}
-#verification-scores{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:150px;overflow:auto}
+#verification-scores{font-size:14px;text-align:left;overflow-wrap:anywhere}
+#verification-comparison{margin-top:12px}
+.comparison-person h3{font-size:15px;margin:10px 0}
+.comparison-pose{display:grid;grid-template-columns:66px minmax(40px,1fr) 58px;align-items:center;gap:8px;margin:7px 0}
+.comparison-pose progress{width:100%;height:12px;accent-color:#21833e}
+.comparison-value{text-align:right;font-variant-numeric:tabular-nums}
+.comparison-summary{font-size:12px;color:#526577;margin:8px 0}
+#verification-scores summary{cursor:pointer;font-weight:600;margin:10px 0}
 #verification-review label{display:block;font-size:14px;line-height:1.4;margin-bottom:12px}
 #verification-approve,#verification-retake,#verification-cancel{margin-top:10px}
 #register-dialog.is-running .hold-label{margin:2px 0!important;min-height:14px;font-size:11px!important;flex-shrink:0}

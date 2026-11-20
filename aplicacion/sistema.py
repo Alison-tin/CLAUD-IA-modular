@@ -14,7 +14,7 @@ from hardware.camara import abrir_camara
 from datos.personas import cargar_db, listar_personas, extraer_rostro, entrenar_reconocedor
 from movimientos.expresiones import hablar, expresion_saludo, expresion_neutro, expresion_reconocido
 from movimientos.gestos import GESTOS_VIDA
-from secuencias.reproductor import Reproductor, resolver_json
+from secuencias.reproductor import Reproductor, resolver_json, EmocionesMovimiento
 from vision.manos import dibujar_mano, dedos_arriba, clasificar_gesto, GESTO_ACCION, COLORES_G
 from vision.emociones import _cargar_deepface, analizar_emocion, deepface_estado
 from vision.modelos import descargar_modelos
@@ -30,6 +30,8 @@ def ejecutar(cam_idx=0, port=None, demo=False, comparar_rostro=False, interfaz=N
     try:
         return _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_comparacion, motor, emociones_externas)
     finally:
+        if 'arduino' in recursos:
+            recursos['arduino'].cancelado = lambda: True
         if "reproductor" in recursos:
             recursos["reproductor"].detener()
         for nombre, metodo in (("cap", "release"), ("cara", "close"),
@@ -103,6 +105,9 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
         if input("Escribe INICIAR para continuar: ").strip() != "INICIAR":
             return
     arduino=Arduino(port=port,demo=demo)
+    recursos['arduino'] = arduino
+    if interfaz is not None:
+        arduino.cancelado = interfaz.detener
     recursos["serial"] = arduino.ser
     if interfaz is not None and hasattr(interfaz, "preparar_arduino"):
         interfaz.preparar_arduino(arduino, demo)
@@ -113,6 +118,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
                         else f"Cabeza fisica: puerto {arduino.ser.port}")
     rep=Reproductor(arduino, lambda mensaje: interfaz.emitir("aviso_secuencia", mensaje) if interfaz else None)
     recursos["reproductor"] = rep
+    movimientos_emocion = EmocionesMovimiento(rep)
     time.sleep(0.5); arduino.ir_a_centro(); arduino.parpado(abrir=True)
     # Arranque fisico: abre y cierra el maxilar (PCA0, canal 12).
     arduino.mover_maxilar(abrir=True, vel=5);  time.sleep(0.5)
@@ -192,9 +198,9 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
     # Gestos
     g_cand=None; g_frames=0; ult_g_t={}; ult_g_act=None
 
-    def _parpado():
-        arduino.parpado(abrir=False,vel=2); time.sleep(0.10)
-        arduino.parpado(abrir=True,vel=2)
+    def _parpado(a):
+        a.parpado(abrir=False,vel=2); a.esperar(0.10)
+        a.parpado(abrir=True,vel=2)
 
     def _analizar_emo(key, roi_rgb, x1,y1,x2,y2):
         emo,conf=analizar_emocion(roi_rgb,x1,y1,x2,y2)
@@ -216,6 +222,8 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
             f_emo = opciones.get("emociones", f_emo)
             if not f_rec:
                 nombre_primario = None
+        if not f_emo:movimientos_emocion.actualizar(None, activo=False)
+        respuesta_emocion = None
         lectura_actual = (sin_resultado("sin_rostro" if f_rec else "desactivado")
                           if sf_motor else sin_lectura())
         panel_debug = None
@@ -228,6 +236,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
         try:
             validar_bgr(frame)
         except ValueError as error:
+            movimientos_emocion.actualizar(None)
             print(f" Fotograma descartado: {error}")
             if interfaz is not None:
                 interfaz.emitir("reconocimiento", lectura_actual)
@@ -250,7 +259,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
 
         # Parpadeo automatico
         if ahora-t_ult_parp>int_parp and not idle_activo["v"]:
-            threading.Thread(target=_parpado,daemon=True).start()
+            rep.accion('parpadeo', _parpado)
             t_ult_parp=ahora; int_parp=random.uniform(*PARPADEO_INT)
 
         
@@ -346,12 +355,12 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
             pid_x.reset(); pid_y.reset(); pid_cab.reset()
 
         if primario and not rostro_presente:
-            threading.Thread(target=expresion_saludo,args=(arduino,),daemon=True).start()
+            rep.accion('saludo', expresion_saludo)
             rostro_presente=True
         if primario: t_ult_rostro=ahora
 
         if rostro_presente and not primario and ahora-t_ult_rostro>TIMEOUT_ROSTRO:
-            threading.Thread(target=expresion_neutro,args=(arduino,),daemon=True).start()
+            rep.accion('neutro', expresion_neutro)
             arduino.ir_a_centro()
             arduino.enviar(PCA0, 15, SERVO_CUELLO[15][2], SERVO_CUELLO[15][3])  # cabeza neutro
             pos_hor=SERVO[1][2]; pos_ver=SERVO[0][2]; pos_rot=SERVO_CUELLO[15][2]
@@ -365,11 +374,11 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
         elif not idle_activo["v"] and ahora-t_ult_idle>int_idle:
             g=random.choice(GESTOS_VIDA)
             idle_activo["v"]=True
-            def _run_idle(g=g):
-                try: g(arduino)
+            def _run_idle(a, g=g):
+                try: g(a)
                 except Exception as e: print(f" idle: {e}")
                 finally: idle_activo["v"]=False
-            threading.Thread(target=_run_idle,daemon=True).start()
+            if not rep.accion('vida', _run_idle):idle_activo['v']=False
             t_ult_idle=ahora; int_idle=random.uniform(7.0,14.0)
 
         # Dibujar todos los rostros
@@ -469,11 +478,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
 
                                 nombre_primario = nn
 
-                                threading.Thread(
-                                    target=expresion_reconocido,
-                                    args=(arduino,),
-                                    daemon=True
-                                ).start()
+                                rep.accion('reconocido', expresion_reconocido)
 
                                 print(
                                     f" Reconocido: {nn} "
@@ -507,7 +512,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
                         col_nom = (0, 200, 0)
                         if nn != nombre_primario:
                             nombre_primario = nn
-                            threading.Thread(target=expresion_reconocido, args=(arduino,), daemon=True).start()
+                            rep.accion('reconocido', expresion_reconocido)
                     else:
                         nombre_primario = None
                     if os.environ.get('CLAUD_IA_DIAGNOSTICO_SFACE') == '1':
@@ -530,6 +535,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
                 if interfaz is not None:
                     interfaz.emitir("expresion", {"nombre": respuesta["nombre"] if respuesta else None,
                         "confianza": respuesta["confianza"] if respuesta else 0.})
+                respuesta_emocion = respuesta
                 if respuesta:
                     emo_disp = respuesta['nombre']
             elif emociones_externas is None and f_emo and df_estado["ok"]:
@@ -572,7 +578,7 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
                     interfaz.emitir("expresion", {"nombre": None, "confianza": 0.})
             df_estado = emociones_externas.estado()
 
-        if sf_motor is not None and os.environ.get('CLAUD_IA_DIAGNOSTICO_SFACE') == '1' and (not f_rec or not detecciones):
+        if sf_motor is not None and (not f_rec or not detecciones):
             sf_motor.registrar_sin_comparacion(frame_count, 'desactivado' if not f_rec else 'sin_rostro')
 
         if comparar_rostro:
@@ -642,6 +648,8 @@ def _ejecutar(cam_idx, port, demo, comparar_rostro, interfaz, recursos, persona_
                 ult_g_t[g_cand]=ahora; ult_g_act=(g_cand,et,ahora); g_frames=0
 
         
+        movimientos_emocion.actualizar(respuesta_emocion, activo=f_emo and n_personas == 1)
+
         # HUD  panel superior
         
         ph=52  # altura panel

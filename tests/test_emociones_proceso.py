@@ -10,10 +10,81 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from experimental.emociones_proceso import EmocionesProceso, ROOT, enviar
+from experimental.emociones_proceso import EmocionesProceso, ROOT, enviar,interprete_emociones,EmocionesWeb
 
 
 class ProcesoTests(unittest.TestCase):
+    def test_web_habitual_conecta_y_cierra_backend_sin_fallback_local(self):
+        from queue import Queue
+        import threading
+        from interfaz.trabajador import ejecutar_trabajador
+        backend=MagicMock()
+        with patch('experimental.emociones_proceso.EmocionesWeb',return_value=backend) as crear, \
+             patch('aplicacion.sistema.ejecutar') as ejecutar,patch('hardware.exclusion.Exclusivo'):
+            eventos=Queue()
+            ejecutar_trabajador('sistema',{'demo':True},eventos,Queue(),Queue(),threading.Event(),True)
+        crear.assert_called_once_with(demo=True)
+        self.assertIs(ejecutar.call_args.kwargs['emociones_externas'],backend)
+        backend.cerrar.assert_called_once()
+        self.assertEqual(list(eventos.queue)[-1],('finalizado','sistema'))
+
+    def test_backend_fisico_usa_proceso_aislado(self):
+        cliente=MagicMock()
+        with patch('experimental.emociones_proceso.EmocionesProceso',return_value=cliente) as crear:
+            c=EmocionesWeb(demo=False)
+            c.actualizar(self.imagen)
+            crear.assert_called_once()
+            cliente.actualizar.assert_called_once()
+            c.cerrar();cliente.cerrar.assert_called_once()
+
+    def test_fallo_backend_se_aisla_y_desactivar_permite_reintento(self):
+        cliente=MagicMock();cliente.actualizar.side_effect=RuntimeError('Fallo simulado')
+        cliente.estado.return_value=dict(ok=False,intentado=True,externo=True,detalle='desactivado')
+        with patch('experimental.emociones_proceso.EmocionesProceso',return_value=cliente):
+            c=EmocionesWeb()
+            self.assertIsNone(c.actualizar(self.imagen))
+            self.assertIn('seguir usando',c.estado()['mensaje_usuario'])
+            cliente.desactivar.assert_called_once()
+            cliente.actualizar.side_effect=None;cliente.actualizar.return_value=None
+            c.actualizar(None,activo=False)
+            c.actualizar(self.imagen,activo=True)
+            self.assertEqual(c.error,'')
+            c.cerrar();c.cerrar();cliente.cerrar.assert_called_once()
+
+    def test_control_normal_muestra_fallo_y_limpia_al_parar(self):
+        from web_local.control import Control
+        import threading
+        c=Control();c.estado.update(fase='activo',actividad='sistema',rostros=1,nombre='Registrada',expresion='Anterior')
+        c.evento('deteccion',dict(rostros=1,gesto='puno',deepface=dict(ok=False,intentado=True,externo=True,
+            detalle='no disponible: timeout',mensaje_usuario='Demora de emociones')))
+        self.assertIsNone(c.estado['expresion'])
+        self.assertEqual(c.estado['detalle_emociones'],'Demora de emociones')
+        self.assertEqual(c.estado['nombre'],'Registrada')
+        self.assertEqual(c.estado['gesto'],'Puño')
+        c.proceso=MagicMock();c.parada=threading.Event();c.detener()
+        c.evento('expresion',dict(nombre='Atrasada',confianza=.9))
+        c.evento('deteccion',dict(rostros=1,gesto=None,deepface=dict(ok=True,intentado=True,externo=True,detalle='listo')))
+        self.assertIsNone(c.estado['expresion'])
+        self.assertEqual(c.estado['emociones_estado'],'detenido')
+
+    def test_emociones_fisicas_se_habilitan_por_api(self):
+        from web_local.control import Control
+        from queue import Queue
+        c=Control();c.proceso=MagicMock();c.comandos=Queue();c.estado['modo']='fisico'
+        c.opciones({'emociones':True})
+        self.assertTrue(c.estado['opciones']['emociones'])
+        self.assertEqual(c.comandos.get(),('opciones',{'emociones':True}))
+
+    def test_seleccion_entorno_nuevo_y_compatibilidad_con_existente(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td,patch('experimental.emociones_proceso.ROOT',Path(td)):
+            esperado=Path(td)/'.venv_emociones/Scripts/python.exe'
+            self.assertEqual(interprete_emociones(),esperado)
+            legado=Path(td)/'.venv_prueba_emociones/Scripts/python.exe';legado.parent.mkdir(parents=True);legado.touch()
+            self.assertEqual(interprete_emociones(),legado)
+            esperado.parent.mkdir(parents=True);esperado.touch()
+            self.assertEqual(interprete_emociones(),esperado)
+
     def setUp(self):
         self.stack = ExitStack()
         self.stack.enter_context(patch('cv2.VideoCapture', side_effect=AssertionError('Sin camara')))
@@ -40,7 +111,7 @@ class ProcesoTests(unittest.TestCase):
         c = self.cliente()
         self.esperar(c, lambda: c.resultado is not None)
         self.assertEqual(c.resultado['nombre'], 'Feliz')
-        self.assertEqual(c.proceso.args[0], str(ROOT/'.venv_prueba_emociones/Scripts/python.exe'))
+        self.assertEqual(c.proceso.args[0], str(interprete_emociones()))
         proceso = c.proceso
         c.cerrar()
         self.assertIsNotNone(proceso.poll())
@@ -135,7 +206,7 @@ class ProcesoTests(unittest.TestCase):
         self.assertTrue(r is None or r['nombre'] != 'Vieja')
 
     def test_eof_cierra_hijo_incluso_durante_inferencia_lenta(self):
-        p = subprocess.Popen([str(ROOT/'.venv_prueba_emociones/Scripts/python.exe'), '-B',
+        p = subprocess.Popen([str(interprete_emociones()), '-B',
             str(ROOT/'experimental/worker_emociones.py'), '--simulado', 'normal', '--demora', '20'],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:

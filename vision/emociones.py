@@ -59,8 +59,8 @@ def _cargar_deepface():
 
     except ImportError:
         print(
-            "  DeepFace no instalado  "
-            "pip install deepface"
+            "  Emociones no disponibles en este entorno. "
+            "Usa la prueba separada con requirements-emociones.txt; no mezcles sus dependencias con .venv."
         )
 
     except Exception as e:

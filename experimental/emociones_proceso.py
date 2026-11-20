@@ -1,5 +1,6 @@
 """Cliente no bloqueante: una petición en curso y solo el último recorte pendiente."""
 import json
+import logging
 from pathlib import Path
 import queue
 import struct
@@ -12,6 +13,63 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+LOG = logging.getLogger('claudia.emociones')
+
+
+def interprete_emociones():
+    nuevo=ROOT/'.venv_emociones/Scripts/python.exe'
+    legado=ROOT/'.venv_prueba_emociones/Scripts/python.exe'
+    return nuevo if nuevo.is_file() or not legado.is_file() else legado
+
+
+class EmocionesWeb:
+    """Adaptador de la web habitual: fallo aislado y proceso interno en Demo y modo fisico."""
+    def __init__(self,demo=True):
+        self.demo=demo;self.cliente=None;self.cerrado=False
+        self.error='';self.ultimo_error='';self.activo=False
+
+    def actualizar(self,recorte=None,activo=True,objetivo=None):
+        if self.cerrado:return None
+        self.activo=activo
+        try:
+            if self.cliente is None:
+                if not activo:return None
+                self.cliente=EmocionesProceso(interprete=interprete_emociones())
+            if self.error:
+                if activo:return None
+                self.error=''
+            return self.cliente.actualizar(recorte,activo=activo,objetivo=objetivo)
+        except Exception as error:
+            LOG.exception('Fallo aislado de emociones')
+            self.error=f'no disponible: {type(error).__name__}: {error}'
+            if self.cliente is not None:
+                try:self.cliente.desactivar()
+                except Exception:LOG.exception('Error al desactivar emociones tras fallo')
+            return None
+
+    def estado(self):
+        estado=(self.cliente.estado() if self.cliente is not None else
+            dict(ok=False,intentado=True,externo=True,detalle='desactivado'))
+        if self.error:estado.update(ok=False,detalle=self.error)
+        detalle=estado['detalle']
+        if detalle.startswith('no disponible:') and detalle!=self.ultimo_error:
+            LOG.warning('Emociones: %s',detalle);self.ultimo_error=detalle
+        if 'FileNotFoundError' in detalle and 'Falta modelo local' not in detalle:
+            mensaje='Falta instalar el entorno de emociones. Reconocimiento y gestos siguen disponibles.'
+        elif 'Falta modelo local' in detalle:
+            mensaje='Faltan modelos de emociones. Completa su instalación.'
+        elif 'tiempo de espera' in detalle or 'caducado' in detalle:
+            mensaje='Emociones no disponible por demora. Desactiva y reactiva para reintentar.'
+        elif detalle.startswith('no disponible:'):
+            mensaje='Falló el análisis de emociones. Puedes seguir usando reconocimiento y gestos.'
+        else:mensaje=''
+        estado['mensaje_usuario']=mensaje
+        return estado
+
+    def cerrar(self):
+        if self.cerrado:return
+        self.cerrado=True
+        if self.cliente is not None:self.cliente.cerrar()
 
 
 def enviar(pipe, cabecera, datos=b''):
@@ -24,7 +82,7 @@ def enviar(pipe, cabecera, datos=b''):
 class EmocionesProceso:
     def __init__(self, interprete=None, timeout=2.5, inicio_timeout=30., vigencia=2.5,
                  intervalo=.5, simulado=None, demora=0.):
-        self.interprete = Path(interprete or ROOT/'.venv_prueba_emociones/Scripts/python.exe')
+        self.interprete = Path(interprete or interprete_emociones())
         self.timeout, self.inicio_timeout, self.vigencia = timeout, inicio_timeout, vigencia
         self.intervalo, self.simulado, self.demora = intervalo, simulado, demora
         self.lock = threading.RLock()

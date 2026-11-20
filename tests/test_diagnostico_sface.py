@@ -10,11 +10,31 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from evaluar_sface import SFace
-from vision.motor_sface import MotorSFace, decidir_sface
+from vision.motor_sface import MotorSFace, decidir_sface,ConfirmacionSFace
 from vision.galeria_sface import digest
 
 
 class DiagnosticoTests(unittest.TestCase):
+    def test_consecutivas_no_retienen_nombre_y_rechazo_se_limpia(self):
+        filtro=ConfirmacionSFace();caja=(0,0,100,100)
+        def lectura(n,valor=.6):return decidir_sface(n,valor,{'Registrada','Otra'})
+        for esperado in ('Desconocido','Desconocido','Registrada'):
+            self.assertEqual(filtro.aplicar(lectura('Registrada'),caja)['nombre'],esperado)
+        for n in ('Otra','Registrada','Otra'):
+            self.assertEqual(filtro.aplicar(lectura(n),caja)['nombre'],'Desconocido')
+        self.assertEqual(filtro.aplicar(lectura('Otra',.1),caja)['nombre'],'Desconocido')
+        self.assertEqual(filtro.cuenta,0)
+        for _ in range(3):r=filtro.aplicar(lectura('Registrada'),caja)
+        self.assertEqual(r['nombre'],'Registrada')
+        self.assertEqual(filtro.aplicar(lectura('Registrada'),(500,0,100,100))['nombre'],'Desconocido')
+        filtro.aplicar({'estado_reconocimiento':'sin_rostro','nombre':None},None)
+        self.assertEqual(filtro.cuenta,0)
+
+    def test_empate_e_inconsistencia_no_asignan_identidad(self):
+        self.assertEqual(decidir_sface('A',.7,{'A','B'},{'A':.7,'B':.7})['nombre'],'Desconocido')
+        self.assertNotEqual(decidir_sface('A',.7,{'A','B'},{'A':.7,'B':.8})['estado_reconocimiento'],'aceptado')
+        self.assertNotEqual(decidir_sface('A',.7,{'A','B'},{'A':.7})['estado_reconocimiento'],'aceptado')
+
     def test_maximo_por_identidad_y_segunda_distinta_no_segundo_template(self):
         m=object.__new__(SFace)
         m.reconocedor=MagicMock()

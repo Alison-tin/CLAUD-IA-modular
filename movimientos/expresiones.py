@@ -1,4 +1,9 @@
 import time
+
+def _esperar(arduino, segundos):
+    esperar = getattr(arduino, "esperar", time.sleep)
+    esperar(segundos)
+
 import threading
 
 from configuracion.config import (
@@ -32,7 +37,7 @@ def mover_boca(arduino, ciclos=4, vel=8, pausa=0.13):
             vel
         )
 
-        time.sleep(pausa)
+        _esperar(arduino, pausa)
 
         arduino.enviar(
             MAXILAR_PCA,
@@ -41,7 +46,7 @@ def mover_boca(arduino, ciclos=4, vel=8, pausa=0.13):
             vel
         )
 
-        time.sleep(pausa)
+        _esperar(arduino, pausa)
 
     # Asegurar boca cerrada
     arduino.enviar(
@@ -73,7 +78,7 @@ def expresion_saludo(arduino):
 
     for canal, posicion in [
         (3, 450),
-        (4, 400),
+        (4, SERVO[4][0]),
         (5, 660),
         (8, 580),
         (9, 480),
@@ -128,7 +133,7 @@ def expresion_reconocido(arduino):
         arduino
     )
 
-    time.sleep(0.3)
+    _esperar(arduino, 0.3)
 
     arduino.enviar(
         PCA,
@@ -144,7 +149,7 @@ def expresion_reconocido(arduino):
         3
     )
 
-    time.sleep(0.25)
+    _esperar(arduino, 0.25)
 
     arduino.enviar(
         PCA,

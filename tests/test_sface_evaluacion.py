@@ -45,13 +45,13 @@ class EvaluacionSFaceTests(unittest.TestCase):
                 e.archivo_local(Path(td), '../foto.png')
 
     def test_modelos_reales_y_alineacion_sin_hardware(self):
-        # Comprobacion tecnica con una foto antigua, no ensayo de precision.
-        from configuracion.config import FOTOS_DIR
-        foto = Path(FOTOS_DIR)/'Alison_sesion_nueva_20261026_213154_748403'/'Alison_001.jpg'
+        # Solo ejecución técnica: no depende de fotografías personales ni mide precisión.
+        imagen=np.random.default_rng(2026).integers(0,256,(320,320,3),np.uint8)
+        puntos=np.array([65,65,160,190,110,120,180,120,145,160,115,200,175,200,.99],np.float32)
         with patch('cv2.VideoCapture', side_effect=AssertionError('Camara prohibida')), \
              patch('serial.Serial', side_effect=AssertionError('Arduino prohibido')):
             sf = e.SFace()
-            feature, error = sf.extraer(cv2.imread(str(foto)))
+            feature, error = sf.extraer_cara(imagen,puntos)
             self.assertEqual(error, '')
             self.assertEqual(feature.shape, (1,128))
             self.assertTrue(np.isfinite(feature).all())

@@ -52,6 +52,18 @@ class TransaccionTests(unittest.TestCase):
 
     def servicio(self):return AltaSFace(self.db,self.fotos,self.e,self.gal)
 
+    def test_indicio_duplicado_no_permite_aprobacion_manual(self):
+        for manual in (False,True):
+            self.motor.reconocedor.match.side_effect=[v for s in (.60,.65,.59,.48,.70) for v in (s,.2)]
+            r=self.servicio().completar('Otro nombre',self.frames,self.jpegs,lambda:False,confirmacion_manual=manual)
+            self.assertTrue(r['posible_duplicado'])
+            self.assertFalse(r['revision_manual'])
+            self.assertEqual(len(r['puntuaciones']),5)
+            self.intacto()
+
+    def test_duplicado_con_una_sola_identidad(self):
+        self.assertEqual(decidir([{'Registrada':.7}]*5,{'Registrada'}),('duplicado','Registrada'))
+
     def test_revision_manual_solo_dudosa_revalida_cinco_y_guarda(self):
         s=self.servicio()
         self.motor.reconocedor.match.return_value=.42
@@ -107,7 +119,8 @@ class TransaccionTests(unittest.TestCase):
         motor.reconocedor=MagicMock()
         motor.reconocedor.match.side_effect=lambda a,b,t:.9 if np.array_equal(a,b) else .1
         nuevo.modelo=motor
-        lectura=nuevo.reconocer(np.zeros((140,140,3),np.uint8),[(10,10,100,100)])
+        for _ in range(3):
+            lectura=nuevo.reconocer(np.zeros((140,140,3),np.uint8),[(10,10,100,100)])
         self.assertEqual(lectura['nombre'],'Nueva / Nombre')
         from web_local.control import Control
         self.assertIn({'nombre':'Nueva / Nombre','fotos':5},Control(self.db,self.fotos).personas())

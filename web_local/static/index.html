@@ -69,15 +69,15 @@
 </div>
 <details id="registration-diagnostics" hidden class="registration-diagnostics"><summary>Diagnostico tecnico (opcional)</summary><p>Indica el motivo del bloqueo, angulos, rangos, luz, nitidez y estabilidad. No se guardan imagenes ni registros de diagnostico.</p><pre id="registration-debug" tabindex="0">Todavia no hay lecturas.</pre></details>
 <div id="registration-tip" hidden></div></dialog>
-<dialog id="guide-dialog"><div class="dialog-heading"><span class="eyebrow">INTERACTÚA CON TUS MANOS</span><button id="close-guide" class="close-dialog" aria-label="Cerrar guía">×</button></div><h2>Nueve formas de conectar.</h2><p>Mantén la mano visible y el gesto estable durante unos instantes. Se elige la mano más cercana al centro.</p><div id="gesture-guide" class="gesture-guide"></div><p class="honest-note">Detectar un gesto no significa que se haya realizado un movimiento físico.</p></dialog>
+<dialog id="guide-dialog"><div class="dialog-heading"><span class="eyebrow">INTERACTÚA CON TUS MANOS</span><button id="close-guide" class="close-dialog" aria-label="Cerrar guía">×</button></div><h2>Guía de gestos</h2><p>Mantén la mano visible y el gesto estable durante unos instantes. Se elige la mano más cercana al centro. En Demo se detecta la mano sin mover el robot.</p><div id="gesture-guide" class="gesture-guide"></div></dialog>
 <dialog id="delete-dialog" aria-labelledby="delete-title"><div class="dialog-heading"><span class="eyebrow">GESTIONAR REGISTRO</span><button id="close-delete" class="close-dialog" aria-label="Cancelar eliminación">×</button></div><h2 id="delete-title">¿Retirar este registro?</h2><p>Vas a eliminar de la base a <strong id="delete-name"></strong>. Sus fotos y una copia de la base se conservarán en un respaldo. Las demás personas no se modificarán.</p><p id="delete-status" class="delete-status" role="status"></p><button id="confirm-delete" class="button danger wide">Eliminar registro y respaldar fotos</button><button id="cancel-delete" class="button secondary wide">Cancelar</button></dialog>
 <dialog id="registration-verification" aria-labelledby="verification-message" aria-modal="true">
 <div class="verification-content">
 <div class="verification-robot"><span id="verification-loading" class="verification-spinner" aria-hidden="true"></span><img id="verification-robot" src="/imagenes/posturas/frente.png" alt="Robot CLAUD-IA" width="96" height="96"></div>
 <div class="verification-copy"><h2 id="verification-title" hidden>Registro no completado</h2><p id="verification-message" role="status" aria-live="polite" tabindex="-1">Verificando el registro&#8230;</p></div>
 </div>
+<div id="verification-comparison" hidden><div id="verification-scores"></div></div>
 <div id="verification-review" hidden>
-<pre id="verification-scores"></pre>
 <label><input id="verification-confirm" type="checkbox"> Revisé las puntuaciones y confirmo que esta persona no está registrada.</label>
 <button id="verification-approve" class="button primary wide" type="button" disabled>Confirmar persona nueva</button>
 </div>

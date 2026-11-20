@@ -1,13 +1,16 @@
 """Prueba DOM/JavaScript local en Edge headless. Sin servidor ni dispositivos."""
 from pathlib import Path
+import json
 import re
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 
 
-def verificar(ancho=1366, alto=768):
+def verificar(ancho=1366, alto=768, lecturas=None):
     html = (ROOT/'web_local/static/index.html').read_text(encoding='utf-8')
     js = (ROOT/'web_local/static/app.js').read_text(encoding='utf-8')
     # Ejecutar el JS real y su DOM; suprimir solo el arranque de polling/autenticacion.
@@ -16,12 +19,24 @@ def verificar(ancho=1366, alto=768):
     pruebas = r'''
 window.fetch = async (url, options) => {
   window.requests.push([url, options]);
+  if (url==='/api/guia-gestos') return {ok:true,json:async()=>({gestos:window.guiaParaPrueba})};
   return {ok:true, json:async()=>({ok:true})};
 };
 window.requests=[];
 function check(ok,msg) { if(!ok) throw new Error(msg); }
 async function pruebasSFace() {
   try {
+    $('guide-button').click();
+    await new Promise(resolve=>setTimeout(resolve,50));
+    check($('guide-dialog').open,'Guia abierta');
+    const tarjetas=[...$('gesture-guide').querySelectorAll('.gesture-item')];
+    check(tarjetas.length===9,'Nueve asociaciones de gestos');
+    window.guiaParaPrueba.forEach((g,i)=> {
+      check(tarjetas[i].dataset.gesto===g.gesto,'Gesto del selector real');
+      check(tarjetas[i].querySelector('.gesture-movement').textContent==='Robot: '+g.movimiento,'Movimiento del JSON correspondiente');
+      check(!tarjetas[i].querySelector('small'),'Tarjeta sin notas pequeñas');
+    });
+    $('close-guide').click();
     let s={fase:"detenido",actividad:null,modo:"demo",camara:false,rostros:0,
       motor_seleccionado:"sface",motor_activo:null,nombre:null,similitud_estimada:null,total:5,progreso:0,
       similitud_coseno:null,opciones:{reconocimiento:true,emociones:true,gestos:true},recorrido:{}};
@@ -47,6 +62,16 @@ async function pruebasSFace() {
     check($("recognition-engine").disabled,"Selector activo bloqueado");
     check($("result-similarity").textContent==="Similitud 70,1 %","Coseno correcto");
     check($("camera-recognition").textContent==="Alison \u2014 Similitud 70,1 %","Formato de video exacto");
+    render({...s,emociones_estado:'listo',expresion:'Feliz'});
+    check($('result-expression').textContent==='Feliz','Emocion en la interfaz habitual');
+    render({...s,emociones_estado:'no disponible',expresion:'Atrasada',detalle_emociones:'Falta instalar el entorno de emociones.'});
+    check($('result-expression').textContent==='Sin lectura','Fallo limpia emocion anterior');
+    check($('expression-note').textContent.includes('Falta instalar'),'Motivo claro de indisponibilidad');
+    check($('result-name').textContent==='Alison','Reconocimiento continua ante fallo de emociones');
+    render({...s,modo:'fisico',emociones_estado:'no disponible',expresion:'No mostrar'});
+    check($('result-expression').textContent==='Sin lectura','Fallo limpia emociones en fisico');
+    check(!document.querySelector('[data-option="emociones"]').disabled,'Control disponible en fisico');
+    render(s);
     check($("recognition-engine-status").textContent.includes("SFace"),"Motor real");
     s={...s,nombre:"Desconocido",similitud_coseno:null};render(s);
     check($("result-name").textContent==="Desconocido","Rechazo");
@@ -194,11 +219,24 @@ async function pruebasSFace() {
     render(altaState);
     check(!$('verification-review').hidden && $('verification-understood').hidden,'Revision solo si servidor permite');
     check($('verification-approve').disabled,'Confirmacion expresa requerida');
-    check($('verification-scores').textContent.includes('Alison: 0.4200'),'Puntuaciones de cinco fotos visibles');
+    check($('verification-scores').textContent.includes('Similitud con Alison'),'Nombre de mayor similitud primero');
+    check($('verification-scores').textContent.includes('42,0 %'),'Similitud real en porcentaje');
+    check($('verification-scores').querySelector('.comparison-person').querySelectorAll('progress').length===5,'Cinco posturas con barras');
+    check(!$('verification-scores').querySelector('details').open,'Otras identidades en detalles cerrados');
     $('verification-confirm').checked=true;$('verification-confirm').dispatchEvent(new Event('change'));
     check(!$('verification-approve').disabled,'Puede confirmar persona nueva');
     render(altaState);
     check($('verification-confirm').checked,'Polling no borra confirmacion pendiente');
+    render({...altaState,resultado_registro:{estado:'dudoso',posible_duplicado:true,revision_manual:false,
+      puntuaciones:Array.from({length:5},()=>({'Persona B':.6,'Persona A':.3}))}});
+    check($('verification-review').hidden && !$('verification-comparison').hidden,'Posible duplicado muestra comparacion sin aprobacion');
+    check($('verification-scores').querySelector('h3').textContent==='Similitud con Persona B','Orden descendente por media');
+    const lecturasReales=[.571,.627,.556,.478,.662].map((v,i)=>({'Registrada':v,'Otra':i===0?.9:-.05}));
+    check(renderSimilitudesRegistro(lecturasReales),'Comparacion completa valida');
+    check($('verification-scores').querySelector('h3').textContent==='Similitud con Registrada','Media de cinco posturas, no maximo aislado');
+    const valores=[...$('verification-scores').querySelector('.comparison-person').querySelectorAll('.comparison-value')].map(n=>n.textContent);
+    check(JSON.stringify(valores)===JSON.stringify(['57,1 %','62,7 %','55,6 %','47,8 %','66,2 %']),'Cada porcentaje corresponde a su postura');
+    check($('verification-scores').textContent.includes('-5,0 %'),'Similitudes negativas conservadas en texto');
     render({...altaState,resultado_registro:{estado:'cancelado',indicacion:'Revision vencida'}});
     check($('verification-review').hidden && !$('verification-understood').hidden,'Vencimiento reemplaza revision');
     $('verification-understood').click();
@@ -217,6 +255,22 @@ async function pruebasSFace() {
 }
 pruebasSFace();
 '''
+    from vision.manos import guia_gestos
+    datos_guia=json.dumps(guia_gestos(),ensure_ascii=True).replace('<','\\u003c')
+    pruebas='window.guiaParaPrueba='+datos_guia+';\n'+pruebas
+    if lecturas is not None:
+        nombres=sorted(lecturas[0],key=lambda n:sum(s[n] for s in lecturas),reverse=True)
+        esperado=[format(s[nombres[0]]*100,'.1f').replace('.',',')+' %' for s in lecturas]
+        datos=json.dumps(dict(lecturas=lecturas,nombre=nombres[0],valores=esperado),ensure_ascii=True).replace('<','\\u003c')
+        comprobacion="""
+    const reales=DATOS_REALES;
+    check(renderSimilitudesRegistro(reales.lecturas),'Datos reales completos');
+    const principal=$('verification-scores').querySelector('.comparison-person');
+    check(principal.querySelector('h3').textContent==='Similitud con '+reales.nombre,'Mayor similitud real');
+    check(JSON.stringify([...principal.querySelectorAll('.comparison-value')].map(n=>n.textContent))===JSON.stringify(reales.valores),'Porcentajes reales en sus cinco posturas');
+    [...principal.querySelectorAll('progress')].forEach((barra,i)=>check(Math.abs(barra.value-Math.max(0,reales.lecturas[i][reales.nombre]*100))<1e-8,'Barra real por postura'));
+""".replace('DATOS_REALES',datos)
+        pruebas=pruebas.replace('    document.documentElement.dataset.sfaceTest="OK";',comprobacion+'    document.documentElement.dataset.sfaceTest="OK";')
     html = html.replace('<script src="/app.js" defer></script>', '')
     html = html.replace('</head>', '<style>'+(ROOT/'web_local/static/app.css').read_text(encoding='utf-8')+'</style></head>')
     html = html.replace('</body>', '<script>'+js+'\n'+pruebas+'</script></body>')
@@ -240,5 +294,14 @@ pruebasSFace();
 
 
 if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--desde-registro',action='store_true',help='Verifica también las puntuaciones reales del último intento local; no guarda fotos')
+    args=parser.parse_args()
+    lecturas=None
+    if args.desde_registro:
+        filas=[json.loads(l) for l in (ROOT/'configuracion/registro_sface.log').read_text(encoding='utf-8').splitlines() if l.strip()]
+        lecturas=next(f['puntuaciones'] for f in reversed(filas) if f.get('etapa')=='comparacion' and 'puntuaciones' in f)
     for dimensiones in ((1366,768),(1024,600),(800,600),(540,720)):
-        verificar(*dimensiones)
+        verificar(*dimensiones,lecturas=lecturas)
+    if lecturas is not None:print('Cinco posturas del ultimo intento local: nombres, orden, porcentajes y barras verificados; sin guardar imagenes.')

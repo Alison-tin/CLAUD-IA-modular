@@ -46,6 +46,9 @@ def main():
     logging.basicConfig(level=logging.WARNING)
     with Exclusivo("servidor_web"):
         acceso = configurar(args.cambiar_clave)
+        from configuracion.config import DB_PATH
+        from interfaz.registro import inicializar_base
+        inicializar_base(DB_PATH)
         from web_local.control import Control
         control = Control()
         servidor = Servidor(("127.0.0.1" if args.local else "0.0.0.0", args.puerto), control, acceso)

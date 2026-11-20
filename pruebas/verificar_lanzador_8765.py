@@ -18,7 +18,7 @@ def main():
         try: prueba.bind(('127.0.0.1',8765))
         except OSError:
             raise RuntimeError('8765 ya esta ocupado; no se toca el servidor existente')
-    with (ROOT/'documentacion/VERIFICACION_LANZADOR_8765.log').open('w',encoding='utf-8') as log:
+    with (ROOT/'pruebas/VERIFICACION_LANZADOR_8765.log').open('w',encoding='utf-8') as log:
         p=subprocess.Popen(['cmd.exe','/d','/c',str(ROOT/'Iniciar_CLAUD_IA_Web.cmd')],
             cwd=ROOT,stdin=subprocess.PIPE,stdout=log,stderr=log,
             creationflags=subprocess.CREATE_NO_WINDOW)

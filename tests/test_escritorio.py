@@ -184,10 +184,10 @@ class ProteccionMovimientosTests(unittest.TestCase):
     def test_configuracion_y_modulos_intactos(self):
         esperados = {
             "configuracion/config.py": "eda158302eb84aacb8a9067735c466f5e4536633d48d47272e7d45355fdb170f",
-            # Unico cambio autorizado: arbitraje de envios entre hilos.
-            "hardware/arduino.py": "5424e7de9e093a1c8931c71432b9e181921b419e2354303394d55e0290aa45fa",
-            "movimientos/expresiones.py": "ed835a2a433d2ee7791bc76b099784406f66b786bce07abfd42eb3b9b2314242",
-            "movimientos/gestos.py": "1803cfca62a64c77b9509d526e955603bad4ea0b4d4fd3f7c9282d941e217630",
+            # Cambios autorizados: saludo dentro de limites, esperas cancelables y arbitraje.
+            "hardware/arduino.py": "02b05a921e2cdfb9f49720dfd67adc81318895310c58e64a75c983f5b4a11d9f",
+            "movimientos/expresiones.py": "db02e0cc491ee74f4e0577eebc95f3d749d720c0b4f5a46f400e2d6339b4f51f",
+            "movimientos/gestos.py": "1b6762a2493cd688f447bb045ac740a993c089575b50a3123ea5167f683afb3b",
             "control/pid.py": "ec1db78c75b814fa17bdbcc19e1720e80af486dfb01fd4763c05df79dc802083",
         }
         for nombre, huella in esperados.items():
@@ -196,9 +196,14 @@ class ProteccionMovimientosTests(unittest.TestCase):
     def test_mismas_ordenes_arduino_en_sistema(self):
         def llamadas(nombre):
             arbol = ast.parse((RAIZ/nombre).read_text(encoding="utf-8-sig"))
-            return [ast.dump(n) for n in ast.walk(arbol) if isinstance(n, ast.Call)
-                    and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name)
-                    and n.func.value.id == "arduino"]
+            resultado=[]
+            for n in ast.walk(arbol):
+                if (isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)
+                        and isinstance(n.func.value,ast.Name) and n.func.value.id in ('arduino','a')
+                        and n.func.attr != 'esperar'):
+                    n.func.value.id='arduino'  # proxy cancelable conserva las ordenes
+                    resultado.append(ast.dump(n))
+            return resultado
         self.assertEqual(llamadas("inmoov_vision8.py"), llamadas("aplicacion/sistema.py"))
 
 

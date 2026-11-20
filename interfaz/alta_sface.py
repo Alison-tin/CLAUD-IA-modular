@@ -39,8 +39,8 @@ def decidir(lecturas, activos):
         return 'nueva', None
     if all(r[0][1]<=MAX_NUEVA for r in ranking):
         return 'nueva', None
-    if (len(activos)>1 and len({r[0][0] for r in ranking})==1
-            and all(r[0][1]>=MIN_DUPLICADO and r[0][1]-r[1][1]>=MIN_MARGEN for r in ranking)):
+    if (len({r[0][0] for r in ranking})==1
+            and all(r[0][1]>=MIN_DUPLICADO and (len(r)==1 or r[0][1]-r[1][1]>=MIN_MARGEN) for r in ranking)):
         return 'duplicado',ranking[0][0][0]
     return 'dudoso', None
 
@@ -134,10 +134,18 @@ class AltaSFace:
             return dict(estado=estado,persona=persona,
                         mensaje=f'Esta persona ya está registrada como {persona}. No se guardó un nuevo registro')
         if estado!='nueva':
+            # Un indicio alto no prueba duplicado, pero tampoco autoriza aprobar
+            # una identidad nueva. Reutiliza el límite existente, no el de vivo.
+            if any(max(s.values())>=MIN_DUPLICADO for s in lecturas):
+                cercana=max(self.grupos,key=lambda n:sum(s[n] for s in lecturas)/5)
+                resultado=self._dudoso('posible_duplicado')
+                resultado.update(revision_manual=False,posible_duplicado=True,persona_cercana=cercana,
+                    puntuaciones=lecturas,indicacion=f'Hay parecido con {cercana}. No se puede confirmar un registro nuevo con estas capturas.')
+                return resultado
             if confirmacion_manual is not True:
                 resultado=self._dudoso('comparacion_dudosa')
                 resultado.update(revision_manual=True,puntuaciones=lecturas,
-                    indicacion='Las cinco fotos son válidas, pero la comparación es dudosa. Revisa las puntuaciones y confirma solo si sabes que esta persona no está registrada.')
+                    indicacion='Comparación dudosa. Revisa las similitudes antes de confirmar que es una persona nueva.')
                 return resultado
             self._anotar('revision_manual',evento='persona_nueva_confirmada',puntuaciones=lecturas)
         self._anotar('comparacion',evento='nueva')

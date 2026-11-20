@@ -48,7 +48,7 @@ class Control:
                 "motor_seleccionado": "sface", "motor_activo": None, "galeria_sface": None,
                 "estado_reconocimiento": "sin_lectura", "detalle_reconocimiento": "",
                 "similitud_coseno": None, "nombre": None, "similitud_estimada": None, "expresion": None, "gesto": None, "rostros": 0,
-                "emociones_estado": "sin iniciar", "progreso": 0, "total": 5,
+                "emociones_estado": "sin iniciar", "detalle_emociones": "", "progreso": 0, "total": 5,
                 "prueba_registro": False, "recorrido": {},
                 "registro_nombre": "", "instruccion": "", "aviso": "", "aviso_id": 0,
                 "opciones": {"reconocimiento": True, "emociones": True, "gestos": True}}
@@ -220,6 +220,7 @@ class Control:
 
     def detener(self):
         with self.lock:
+            self.estado.update(expresion=None,emociones_estado='detenido',detalle_emociones='')
             if self.proceso is not None:
                 self.deteniendo = True
                 self.estado["fase"] = "deteniendo"
@@ -243,6 +244,8 @@ class Control:
             for opcion, campo in (("reconocimiento", "nombre"), ("emociones", "expresion"), ("gestos", "gesto")):
                 if not self.estado["opciones"][opcion]:
                     self.estado[campo] = None
+            if not self.estado['opciones']['emociones']:
+                self.estado.update(emociones_estado='desactivado',detalle_emociones='')
             if not self.estado["opciones"]["reconocimiento"]:
                 self.estado["similitud_estimada"] = None
                 self.estado["similitud_coseno"] = None
@@ -274,7 +277,7 @@ class Control:
             permitido=r.get('revision_manual') if manual else r.get('repetir_postura')
             if (not registro_id or registro_id != s.get('registro_id') or not permitido
                     or not s.get('alta_sface') or self.deteniendo or self.proceso is None
-                    or not self.proceso.is_alive() or (manual and confirmacion is not True)):
+                    or not self.proceso.is_alive() or (manual and (confirmacion is not True or r.get('posible_duplicado')))):
                 raise ValueError('Esta revisión no está disponible. Actualiza el estado del registro.')
             try:
                 self.comandos.put_nowait(('confirmar_nueva' if manual else 'repetir_postura',registro_id))
@@ -354,7 +357,7 @@ class Control:
                 similitud = valor.get("similitud_estimada")
                 s["similitud_estimada"] = (similitud if aceptado
                     and type(similitud) in (int, float) and 0 <= similitud <= 1 else None)
-        elif tipo == "expresion" and s["opciones"]["emociones"] and s["rostros"]:
+        elif tipo == "expresion" and s["opciones"]["emociones"] and s["rostros"]==1 and not self.deteniendo and s['fase']=='activo':
             s["expresion"] = valor["nombre"]
             self.ultima_expresion = time.monotonic()
         elif tipo == "deteccion":
@@ -362,6 +365,13 @@ class Control:
             s["gesto"] = GESTOS.get(valor["gesto"]) if s["opciones"]["gestos"] else None
             df = valor["deepface"]
             s["emociones_estado"] = "listo" if df["ok"] else "no disponible" if df["intentado"] else "cargando"
+            s['detalle_emociones']=df.get('mensaje_usuario','')
+            if df.get('externo') and df.get('detalle','').startswith('cargando'):
+                s['emociones_estado']='cargando'
+            if not df['ok']:s['expresion']=None
+            if not s['opciones']['emociones']:s['emociones_estado']='desactivado'
+            if self.deteniendo or s['fase']=='detenido':s.update(expresion=None,emociones_estado='detenido',detalle_emociones='')
+            if s['fase']=='error':s.update(expresion=None,emociones_estado='no disponible',detalle_emociones='El sistema se detuvo.')
             if not s["rostros"]:
                 s["nombre"] = s["expresion"] = s["similitud_estimada"] = s["similitud_coseno"] = None
                 s["estado_reconocimiento"] = "sin_rostro"
@@ -389,6 +399,7 @@ class Control:
         elif tipo == "error":
             LOG.error("Trabajador: %s", valor)
             s["fase"] = "error"
+            s.update(expresion=None,emociones_estado='no disponible',detalle_emociones='El sistema se detuvo.')
             s.update(nombre=None, similitud_estimada=None, similitud_coseno=None, motor_activo=None)
             if s["motor_seleccionado"] == "sface":
                 self.aviso(f"SFace: {valor}")
@@ -435,7 +446,8 @@ class Control:
                         self.proceso = None
                         self.jpeg = None
                         self.estado["motor_activo"] = None
-                        self.estado.update(camara=False, actividad=None, nombre=None, similitud_estimada=None, similitud_coseno=None, expresion=None, gesto=None)
+                        self.estado.update(camara=False, actividad=None, nombre=None, similitud_estimada=None, similitud_coseno=None, expresion=None, gesto=None,
+                            emociones_estado='detenido',detalle_emociones='')
                         if self.estado["modo"] == "fisico" and self.estado["arduino"] not in ("error", "desconectado"):
                             self.estado.update(arduino="desconectado", conexion="Puerto cerrado. Arduino sin conexión activa.")
                         if self.estado["fase"] != "error":

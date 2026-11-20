@@ -22,6 +22,27 @@ def leer_base(ruta):
     return base
 
 
+def inicializar_base(ruta):
+    """Primer arranque sin datos personales; nunca sustituye una base existente."""
+    ruta=Path(ruta)
+    with Exclusivo('base_personas'):
+        if ruta.exists():
+            leer_base(ruta)
+            return False
+        ruta.parent.mkdir(parents=True,exist_ok=True)
+        temporal=ruta.with_name(ruta.name+'.'+uuid.uuid4().hex+'.tmp')
+        try:
+            vacia={'nombres':[],'imagenes':[]}
+            with temporal.open('xb') as f:
+                pickle.dump(vacia,f);f.flush();os.fsync(f.fileno())
+            if leer_base(temporal)!=vacia:
+                raise ValueError('No se pudo verificar la base vacía')
+            os.replace(temporal,ruta)
+        finally:
+            temporal.unlink(missing_ok=True)
+        return True
+
+
 def clave(nombre):
     return unicodedata.normalize("NFKC", nombre).strip().casefold()
 

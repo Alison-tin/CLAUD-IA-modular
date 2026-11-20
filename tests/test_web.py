@@ -116,6 +116,17 @@ class HTTPTests(unittest.TestCase):
         for ruta in ("/api/camara.jpg", "/api/personas", "/api/estado", "/api/puertos", "/api/registro/preparacion"):
             self.assertEqual(self.peticion(ruta)[0], 401)
         self.assertEqual(self.peticion("/api/iniciar", {})[0], 401)
+
+    def test_guia_autenticada_coincide_con_las_secuencias_actuales(self):
+        from vision.manos import guia_gestos,GESTO_ACCION
+        self.assertEqual(self.peticion('/api/guia-gestos')[0],401)
+        self.entrar()
+        codigo,_,cuerpo=self.peticion('/api/guia-gestos')
+        self.assertEqual(codigo,200)
+        guia=json.loads(cuerpo)['gestos']
+        self.assertEqual(guia,guia_gestos())
+        self.assertEqual({g['gesto'] for g in guia},set(GESTO_ACCION))
+        self.assertTrue(all(g['disponible'] and g['coincide_con_codigo'] for g in guia))
         self.control.iniciar.assert_not_called()
 
     def test_preparacion_registro_y_bloqueo_antes_de_capturar(self):

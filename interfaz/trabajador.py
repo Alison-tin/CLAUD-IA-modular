@@ -289,13 +289,16 @@ def registrar(puente, nombre, cam_idx, prueba=False, evaluacion=None, alta_sface
 def ejecutar_trabajador(accion, parametros, eventos, cuadros, comandos, parada, video_limpio=False):
     puente = Puente(eventos, cuadros, comandos, parada)
     puente.video_limpio = video_limpio
+    emociones = None
     try:
         # Evita actividades simultaneas del trabajador compartido.
         from hardware.exclusion import Exclusivo
         with Exclusivo("escritorio"):
             if accion == "sistema":
+                from experimental.emociones_proceso import EmocionesWeb
+                emociones = EmocionesWeb(demo=parametros.get('demo',False))
                 from aplicacion.sistema import ejecutar
-                ejecutar(interfaz=puente, **parametros)
+                ejecutar(interfaz=puente, emociones_externas=emociones, **parametros)
             else:
                 registrar(puente, **parametros)
     except Exception as error:
@@ -309,4 +312,9 @@ def ejecutar_trabajador(accion, parametros, eventos, cuadros, comandos, parada, 
                 mensaje='Registro no completado'))
         puente.emitir("error", f"{type(error).__name__}: {error}")
     finally:
-        puente.emitir("finalizado", accion)
+        try:
+            if emociones is not None:emociones.cerrar()
+        except Exception as error:
+            print(f'Error al cerrar emociones: {error}')
+        finally:
+            puente.emitir("finalizado", accion)

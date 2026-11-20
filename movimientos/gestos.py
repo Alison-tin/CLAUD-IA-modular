@@ -1,6 +1,11 @@
 import random
 import time
 
+def _esperar(arduino, segundos):
+    esperar = getattr(arduino, "esperar", time.sleep)
+    esperar(segundos)
+
+
 from configuracion.config import (
     PCA,
     PCA0,
@@ -123,7 +128,7 @@ def gesto_bostezo(arduino):
         1
     )
 
-    time.sleep(1.2)
+    _esperar(arduino, 1.2)
 
     arduino.enviar(
         MAXILAR_PCA,
@@ -132,7 +137,7 @@ def gesto_bostezo(arduino):
         2
     )
 
-    time.sleep(0.4)
+    _esperar(arduino, 0.4)
 
     arduino.parpado(
         abrir=True,
@@ -170,7 +175,7 @@ def gesto_pensar(arduino):
         3
     )
 
-    time.sleep(
+    _esperar(arduino,
         random.uniform(1.5, 2.5)
     )
 
@@ -200,7 +205,7 @@ def gesto_mirar_alrededor(arduino):
             vel=6
         )
 
-        time.sleep(
+        _esperar(arduino,
             random.uniform(0.4, 0.9)
         )
 
@@ -233,7 +238,7 @@ def gesto_curiosear(arduino):
         )
     )
 
-    time.sleep(
+    _esperar(arduino,
         random.uniform(1.2, 2.0)
     )
 
@@ -250,7 +255,7 @@ def gesto_estirar_cuello(arduino):
         2
     )
 
-    time.sleep(1.4)
+    _esperar(arduino, 1.4)
 
     arduino.enviar(
         PCA0,
@@ -259,7 +264,7 @@ def gesto_estirar_cuello(arduino):
         2
     )
 
-    time.sleep(1.4)
+    _esperar(arduino, 1.4)
 
     arduino.enviar(
         PCA0,
@@ -268,7 +273,7 @@ def gesto_estirar_cuello(arduino):
         3
     )
 
-    time.sleep(0.5)
+    _esperar(arduino, 0.5)
 
 
 def gesto_doble_parpadeo(arduino):
@@ -280,14 +285,14 @@ def gesto_doble_parpadeo(arduino):
             vel=3
         )
 
-        time.sleep(0.12)
+        _esperar(arduino, 0.12)
 
         arduino.parpado(
             abrir=True,
             vel=3
         )
 
-        time.sleep(0.18)
+        _esperar(arduino, 0.18)
 
 
 def gesto_suspiro(arduino):
@@ -309,7 +314,7 @@ def gesto_suspiro(arduino):
         2
     )
 
-    time.sleep(0.6)
+    _esperar(arduino, 0.6)
 
     arduino.enviar(
         MAXILAR_PCA,
@@ -318,7 +323,7 @@ def gesto_suspiro(arduino):
         2
     )
 
-    time.sleep(0.4)
+    _esperar(arduino, 0.4)
 
     _ojos_centro(arduino)
 

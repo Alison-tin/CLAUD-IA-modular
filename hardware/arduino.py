@@ -1,4 +1,5 @@
 import time
+import math
 import threading
 from contextlib import contextmanager
 import serial
@@ -60,6 +61,7 @@ class Arduino:
         self.ser = None
         self._orden_lock = threading.RLock()
         self._secuencia = None
+        self.cancelado = lambda: False
 
 
         if demo:
@@ -96,6 +98,8 @@ class Arduino:
     def enviar(self, pca, canal, pos, vel=5):
 
         with self._orden_lock:
+            if self.cancelado():
+                return
             if self._secuencia is not None and self._secuencia != threading.get_ident():
                 return  # No acumular ordenes ajenas para enviarlas al terminar.
             self._enviar(pca, canal, pos, vel)
@@ -115,7 +119,13 @@ class Arduino:
 
     def _enviar(self, pca, canal, pos, vel=5):
 
-        pos = int(max(0, min(1000, pos)))
+        tabla = SERVO if pca == PCA else SERVO_CUELLO if pca == PCA0 else {}
+        if (type(pca) is not int or type(canal) is not int or canal not in tabla
+                or not isinstance(pos, (int, float)) or isinstance(pos, bool)
+                or not math.isfinite(pos) or not tabla[canal][0] <= pos <= tabla[canal][1]
+                or type(vel) is not int or not 1 <= vel <= 10):
+            raise ValueError(f"Orden fuera de limites configurados: PCA={pca}, canal={canal}, posicion={pos}, velocidad={vel}")
+        pos = int(pos)
 
         cmd = f"PCA,{pca},{canal},{pos},{int(vel)}\n"
 
